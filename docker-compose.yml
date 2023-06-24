@@ -1,0 +1,27 @@
+version: '3.9'   
+
+services:
+  postgres:
+    image: moschopsd20/local-postgres-workspace
+    container_name: fyyur-postgres
+    ports:
+      - '5432:5432'
+    env_file:
+      - .env
+    volumes:
+      - 'postgres:/var/lib/postgresql/data'
+
+volumes:
+    postgres:
+
+# run 
+# docker-compose up
+# su - postgres
+# CREATE USER fyyur_user WITH PASSWORD 'password123';
+# CREATE DATABASE fyyur;
+# GRANT ALL PRIVILEGES ON DATABASE fyyur TO fyyur_user;
+
+# stop postgresql service on windows
+# Windows + R
+# services.msc
+# stop service
