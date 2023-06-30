@@ -1,3 +1,14 @@
+<script>
+	const deleteBtn = (event) => {
+		venueId = event.target.dataset.id;
+		fetch(`/venues/${venueId}`,{method: 'DELETE'})
+		.then(res => {
+			console.log("Success", res)
+			window.location.href = '/venues'
+		})
+	}
+</script>
+
 {% extends 'layouts/main.html' %}
 {% block title %}Fyyur | Venues{% endblock %}
 {% block content %}
@@ -12,22 +23,9 @@
 					<h5>{{ venue.name }}</h5>
 				</div>
 			</a>
-			
+			<button class="delete-venue" data-id="{{ venue.id }}" onclick="deleteBtn(event)">&cross;</button>
 		</li>
-		<button class="delete-venue" data-id="{{ venue.id }}">&cross;</button>
 		{% endfor %}
 	</ul>
 {% endfor %}
 {% endblock %}
-<script>
-	let deleteBtns = document.querySelectorAll('.delete-venue')
-	for(const deleteBtn in deleteBtns) {
-		deleteBtn.addEventListener("click", deleteButton);
-		function deleteButton() {
-			fetch(`/venue/${venueId}`,{method: 'DELETE'})
-			.then(res => {
-				console.log(res)
-			})
-		}
-	}
-</script>
