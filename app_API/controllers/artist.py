@@ -1,27 +1,16 @@
+from datetime import datetime, timezone
 import sys
 from flask import abort, flash, jsonify, redirect, render_template, request, url_for, Blueprint
-from app_API.forms import ArtistForm, VenueForm
-from ..models import db, Artist
+from app_API.forms import ArtistForm, ArtistForm
+from ..models import Show, Venue, db, Artist
+from ..helpers import shows
 
 artist_bp = Blueprint('artists', __name__)
 
 @artist_bp.route('/artists')
 def artists():
-  # TODO: replace with real data returned from querying the database
-  # data=[{
-  #   "id": 4,
-  #   "name": "Guns N Petals",
-  # }, {
-  #   "id": 5,
-  #   "name": "Matt Quevedo",
-  # }, {
-  #   "id": 6,
-  #   "name": "The Wild Sax Band",
-  # }]
-  data = []
-  artists = Artist.query.with_entities(Artist.id, Artist.name)
-  for artist in artists:
-    data.append(artist)
+  data = Artist.query.with_entities(Artist.id, Artist.name).all()
+
   return render_template('pages/artists.html', artists=data)
 
 @artist_bp.route('/artists/search', methods=['POST'])
@@ -32,21 +21,14 @@ def search_artists():
   search_term = request.form.get('search_term', '')
   search_request = Artist.query.filter(Artist.name.ilike(f"%{search_term}%")).all()
   response={
-  "count": search_request.count(),
-  "data": [
-    {
-      "id": result.id,
-      "name": result.name,
-      "num_upcoming_shows": 0,
-    } for result in search_request
-  ]
-  # response={
-  #   "count": 1,
-  #   "data": [{
-  #     "id": 4,
-  #     "name": "Guns N Petals",
-  #     "num_upcoming_shows": 0,
-  #   }]
+    "count": len(search_request),
+    "data": [
+      {
+        "id": result.id,
+        "name": result.name,
+        "num_upcoming_shows": len(shows(result.id, "artist")[1]),
+      } for result in search_request
+    ]
   }
 
   return render_template('pages/search_artists.html', results=response, search_term=request.form.get('search_term', ''))
@@ -56,8 +38,41 @@ def show_artist(artist_id):
   # shows the artist page with the given artist_id
   # TODO: replace with real artist data from the artist table, using artist_id
   
-  # data = list(filter(lambda d: d['id'] == artist_id, [data1, data2, data3]))[0]
-  data = Artist.query.get(artist_id)
+  artist_response = Artist.query.get(artist_id)
+
+  past_shows, upcoming_shows = shows(artist_id, "artist")
+
+  data = {
+    "id": artist_response.id,
+    "name": artist_response.name,
+    "genres": artist_response.genres,
+    "city": artist_response.city,
+    "state": artist_response.state,
+    "phone": artist_response.phone,
+    "website": artist_response.website_link,
+    "facebook_link": artist_response.facebook_link,
+    "seeking_venue": artist_response.seeking_venue,
+    "seeking_description": artist_response.seeking_description,
+    "image_link": artist_response.image_link,
+    "past_shows": [
+      {
+      "venue_id": show.venue_id,
+      "venue_name": show.venue_name,
+      "venue_image_link": show.venue_image_link,
+      "start_time": show.start_time
+      } for show in past_shows
+    ],
+    "upcoming_shows": [
+      {
+      "venue_id": show.venue_id,
+      "venue_name": show.venue_name,
+      "venue_image_link": show.venue_image_link,
+      "start_time": show.start_time
+      } for show in upcoming_shows
+    ],
+    "past_shows_count": len(past_shows),
+    "upcoming_shows_count": len(upcoming_shows),
+  }
   return render_template('pages/show_artist.html', artist=data)
 
 
@@ -65,21 +80,18 @@ def show_artist(artist_id):
 #  ----------------------------------------------------------------
 @artist_bp.route('/artists/<int:artist_id>/edit', methods=['GET'])
 def edit_artist(artist_id):
-  
-  # artist={
-  #   "id": 4,
-  #   "name": "Guns N Petals",
-  #   "genres": ["Rock n Roll"],
-  #   "city": "San Francisco",
-  #   "state": "CA",
-  #   "phone": "326-123-5000",
-  #   "website": "https://www.gunsnpetalsband.com",
-  #   "facebook_link": "https://www.facebook.com/GunsNPetals",
-  #   "seeking_venue": True,
-  #   "seeking_description": "Looking for shows to perform at in the San Francisco Bay Area!",
-  #   "image_link": "https://images.unsplash.com/photo-1549213783-8284d0336c4f?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=300&q=80"
-  # }
-  # TODO: populate form with fields from artist with ID <artist_id>
+  artist_to_edit = Artist.query.get(artist_id)
+  form = ArtistForm(request.form)
+  form.state.data=artist_to_edit.state
+  form.genres.data=artist_to_edit.genres
+  form.seeking_venue.data=artist_to_edit.seeking_venue
+  return render_template('forms/edit_artist.html', form=form, artist=artist_to_edit)
+
+
+@artist_bp.route('/artists/<int:artist_id>/edit', methods=['POST'])
+def edit_artist_submission(artist_id):
+  # TODO: take values from the form submitted, and update existing
+  # artist record with ID <artist_id> using the new attributes
 
   # Set the Flask Form
   form = ArtistForm(request.form)
@@ -115,15 +127,8 @@ def edit_artist(artist_id):
     for field, err in form.errors.items():
         message.append(field + '' + '' '|'.join(err))
         flash('Errors ' + str(message))
-        form = VenueForm()
+        form = ArtistForm()
     return render_template('forms/edit_artist.html', form=form)
-  return render_template('pages/home.html', form=form, artist=new_artist)
-
-@artist_bp.route('/artists/<int:artist_id>/edit', methods=['POST'])
-def edit_artist_submission(artist_id):
-  # TODO: take values from the form submitted, and update existing
-  # artist record with ID <artist_id> using the new attributes
-
   return redirect(url_for('show_artist', artist_id=artist_id))
 
 
@@ -164,11 +169,11 @@ def create_artist_submission():
       db.session.add(new_artist)
       db.session.commit()
       flash('Artist ' + request.form['name'] + ' was successfully listed!')
-    except ValueError as e:
+    except ValueError:
         db.session.rollback()
         flash('An error occurred. Artist' + request.form['name']  + ' could not be created.')
-        print(sys.exc_info)
-        abort(500)
+        form = ArtistForm()  
+        return render_template('forms/new_artist.html', form=form)
     finally:
       db.session.close()
   else:
@@ -176,9 +181,9 @@ def create_artist_submission():
     for field, err in form.errors.items():
         message.append(field + '' + '' '|'.join(err))
         flash('Errors ' + str(message))
-        form = VenueForm()
+        form = ArtistForm()
     return render_template('forms/new_artist.html', form=form)
-  return redirect(url_for('/'))
+  return redirect(url_for('index'))
 
 # Export the artist_bp object
 __all__ = ['artist_bp']

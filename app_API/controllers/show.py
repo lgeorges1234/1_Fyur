@@ -1,22 +1,24 @@
 import sys
 from flask import abort, flash, jsonify, redirect, render_template, request, url_for, Blueprint
-from app_API.forms import ArtistForm, ShowForm, VenueForm
-from ..models import Show, db, Artist
+from app_API.forms import ArtistForm, ShowForm, ShowForm
+from ..models import Show, Venue, db, Artist
+
+from ..helpers import flash_errors
 
 show_bp = Blueprint('shows', __name__)
 
-@show_bp .route('/shows')
+@show_bp.route('/shows')
 def shows():
-  # displays list of shows at /shows
-  # data=[{
-  #   "venue_id": 1,
-  #   "venue_name": "The Musical Hop",
-  #   "artist_id": 4,
-  #   "artist_name": "Guns N Petals",
-  #   "artist_image_link": "https://images.unsplash.com/photo-1549213783-8284d0336c4f?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=300&q=80",
-  #   "start_time": "2019-05-21T21:30:00.000Z"
-  # }]
-  data = Show.query.all()
+
+  data = Show.query.join(Venue, Show.venue_id==Venue.id).join(Artist, Show.artist_id==Artist.id).with_entities(
+    Venue.id.label('venue_id'),
+    Venue.name.label('venue_name'),
+    Artist.id.label('artist_id'),
+    Artist.name.label('artist_name'),
+    Artist.image_link.label('artist_image_link'),
+    Show.start_time.label('start_time')
+  ).all()
+
   return render_template('pages/shows.html', shows=data)
 
 @show_bp.route('/shows/create')
@@ -39,10 +41,10 @@ def create_show_submission():
       db.session.add(new_show)
       db.session.commit()
       flash('Show was successfully listed!')
-    except ValueError as e:
+    except Exception as e:
       db.session.rollback()
-      flash('An error occurred. Artist' + form.name.data + ' could not be created.')
-      print(sys.exc_info)
+      flash('An error occurred. Show: Venue '+ form.venue_id.data+' and Artist ' + form.artist_id.data + ' could not be created : ' + str(e))
+      form = ShowForm()  
       return render_template('forms/new_show.html', form=form)
     finally:
       db.session.close()
@@ -50,11 +52,11 @@ def create_show_submission():
     message = []
     for field, err in form.errors.items():
         message.append(field + '' + '' '|'.join(err))
-        flash('Errors ' + str(message))
-        form = VenueForm()  
+    flash('Errors ' + str(message))
+    form = ShowForm()  
     return render_template('forms/new_show.html', form=form)
   # on successful db insert, flash success
-  return redirect(url_for('static'))
+  return redirect(url_for('index'))
 
 # Export the artist_bp object
 __all__ = ['show_bp']

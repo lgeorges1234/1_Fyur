@@ -1,35 +1,13 @@
 import sys
 from flask import abort, flash, jsonify, redirect, render_template, request, url_for, Blueprint
 from app_API.forms import VenueForm
+from ..helpers import shows
 from ..models import db, Venue
 
 venue_bp = Blueprint('venues', __name__)
 
 @venue_bp.route('/venues')
 def venues():
-  # TODO: replace with real venues data.
-  #       num_upcoming_shows should be aggregated based on number of upcoming shows per venue.
-  # data=[{
-  #   "city": "San Francisco",
-  #   "state": "CA",
-  #   "venues": [{
-  #     "id": 1,
-  #     "name": "The Musical Hop",
-  #     "num_upcoming_shows": 0,
-  #   }, {
-  #     "id": 3,
-  #     "name": "Park Square Live Music & Coffee",
-  #     "num_upcoming_shows": 1,
-  #   }]
-  # }, {
-  #   "city": "New York",
-  #   "state": "NY",
-  #   "venues": [{
-  #     "id": 2,
-  #     "name": "The Dueling Pianos Bar",
-  #     "num_upcoming_shows": 0,
-  #   }]
-  # }]
   venues = Venue.query.all()
   venues_city = Venue.query.distinct(Venue.city, Venue.state).all()
 
@@ -44,7 +22,7 @@ def venues():
           {
             "id": venue.id,
             "name": venue.name,
-            "num_upcoming_shows": 0
+            "num_upcoming_shows": len(shows(venue.id, "venue")[1])
           } for venue in venues if venue.city == place.city and venue.state == place.state
         ]
     })
@@ -64,16 +42,15 @@ def search_venues():
   #   }]
   # }
   search_term=request.form.get('search_term', '')
-  request_search = Venue.query.filter(Venue.name.ilike(f"%{search_term}"))
-  request_search_count = request_search.count()
+  search_request = Venue.query.filter(Venue.name.ilike(f"%{search_term}%")).all()
   response={
-    "count": request_search_count,
+    "count": len(search_request),
     "data": [
       {
       "id": result.id,
       "name": result.name,
-      "num_upcoming_shows": 0,
-      } for result in request_search
+      "num_upcoming_shows": len(shows(result.id, "venue")[1]),
+      } for result in search_request
     ]
   }
   return render_template('pages/search_venues.html', results=response, search_term=request.form.get('search_term', ''))
@@ -160,7 +137,43 @@ def show_venue(venue_id):
   #   "upcoming_shows_count": 1,
   # }
   # data = list(filter(lambda d: d['id'] == venue_id, [data1, data2, data3]))[0]
-  data = Venue.query.get(venue_id)
+
+  venue_response = Venue.query.get(venue_id)
+
+  past_shows, upcoming_shows = shows(venue_id, "venue")
+
+  data = {
+    "id": venue_response.id,
+    "name": venue_response.name,
+    "genres": venue_response.genres,
+    "address": venue_response.address,
+    "city": venue_response.city,
+    "state": venue_response.state,
+    "phone": venue_response.phone,
+    "website": venue_response.website_link,
+    "facebook_link": venue_response.facebook_link,
+    "seeking_talent": venue_response.seeking_talent,
+    "seeking_description": venue_response.seeking_description,
+    "image_link": venue_response.image_link,
+    "past_shows": [
+      {
+      "artist_id": show.artist_id,
+      "artist_name": show.artist_name,
+      "artist_image_link": show.artist_image_link,
+      "start_time": show.start_time
+      } for show in past_shows
+    ],
+    "upcoming_shows": [
+      {
+      "artist_id": show.artist_id,
+      "artist_name": show.artist_name,
+      "artist_image_link": show.artist_image_link,
+      "start_time": show.start_time
+      } for show in upcoming_shows
+    ],
+    "past_shows_count": len(past_shows),
+    "upcoming_shows_count": len(upcoming_shows),
+  }
   return render_template('pages/show_venue.html', venue=data)
 
 #  Create Venue
@@ -199,11 +212,11 @@ def create_venue_submission():
       db.session.add(new_venue)
       db.session.commit()
       flash('Venue ' + request.form['name'] + ' was successfully listed!')
-    except ValueError as e:
+    except Exception as e:
       db.session.rollback()
       flash('An error occurred. Venue ' + form.name.data + ' could not be created.')
-      print(sys.exc_info)
-      abort(500)
+      form = VenueForm()  
+      return render_template('forms/new_venue.html', form=form)
     finally:
       db.session.close()
   else:
@@ -240,21 +253,6 @@ def edit_venue(venue_id):
   form.state.data=venue_to_edit.state
   form.genres.data=venue_to_edit.genres
   form.seeking_talent.data=venue_to_edit.seeking_talent
-  # venue={
-  #   id: 1,
-  #   name: The Musical Hop,
-  #   genres: [Jazz, Reggae, Swing, Classical, Folk],
-  #   address: 1015 Folsom Street,
-  #   city: San Francisco,
-  #   state: CA,
-  #   phone: 123-123-1234,
-  #   website: https://www.themusicalhop.com,
-  #   facebook_link: https://www.facebook.com/TheMusicalHop,
-  #   seeking_talent: True,
-  #   seeking_description: We are on the lookout for a local artist to play every two weeks. Please call us.,
-  #   image_link: https://images.unsplash.com/photo-1543900694-133f37abaaa5?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=400&q=60
-  # }
-  # TODO: populate form with values from venue with ID <venue_id>
   return render_template('forms/edit_venue.html', form=form, venue=venue_to_edit)
 
 @venue_bp.route('/venues/<int:venue_id>/edit', methods=['POST'])
@@ -278,11 +276,11 @@ def edit_venue_submission(venue_id):
           updated_venue.seeking_description = form.seeking_description.data
           db.session.commit()
           flash('Venue ' + request.form['name'] + ' was successfully updated!')
-    except ValueError as e:
+    except Exception as e:
         db.session.rollback()
-        flash('An error occurred. Venue ' + form.name.data + ' could not be created.')
-        print(sys.exc_info)
-        abort(500)
+        flash('An error occurred. Venue ' + form.name.data + ' could not be created.' + str(e))
+        form = VenueForm()  
+        return render_template('forms/new_venue.html', form=form)
     finally:
         db.session.close()
   else:
@@ -296,5 +294,5 @@ def edit_venue_submission(venue_id):
 
 
 
-# Export the artist_bp object
+# Export the venue_bp object
 __all__ = ['venue_bp']
