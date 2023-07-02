@@ -3,6 +3,9 @@ from flask import flash
 
 from .models import Venue, Show, Artist
 
+#   flash errors from a form
+#   take a form in input
+#  ----------------------------------------------------------------
 
 def flash_errors(form):
     for field, errors in form.errors.items():
@@ -10,6 +13,10 @@ def flash_errors(form):
             flash(f"Error in field '{getattr(form, field).label.text}': {error}")
 
 
+#   Query the shows associated to a Venue or an Artist
+#   Take an id and the associated type - Venue or Artist - in input
+#   Return two arrays: past_shows and upcoming_shows
+#  ----------------------------------------------------------------
 def shows(id, name):
     current_time = datetime.now(timezone.utc)
 

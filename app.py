@@ -27,11 +27,10 @@ from app_API.controllers import *
 app = Flask(__name__)
 
 moment = Moment(app)
+# get the configuration from config.py
 app.config.from_object('config')
 db.init_app(app)
 db.app = app
-
-# TODO: connect to a local postgresql database
 
 migrate = Migrate(app, db)
 

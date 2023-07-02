@@ -1,9 +1,6 @@
-import sys
-from flask import abort, flash, jsonify, redirect, render_template, request, url_for, Blueprint
-from app_API.forms import ArtistForm, ShowForm, ShowForm
+from flask import flash, redirect, render_template, request, url_for, Blueprint
+from app_API.forms import ShowForm
 from ..models import Show, Venue, db, Artist
-
-from ..helpers import flash_errors
 
 show_bp = Blueprint('shows', __name__)
 
@@ -21,16 +18,16 @@ def shows():
 
   return render_template('pages/shows.html', shows=data)
 
+#  Create Show
+#  ----------------------------------------------------------------
+
 @show_bp.route('/shows/create')
 def create_shows():
-  # renders form. do not touch.
   form = ShowForm()
   return render_template('forms/new_show.html', form=form)
 
 @show_bp.route('/shows/create', methods=['POST'])
 def create_show_submission():
-  # called to create new shows in the db, upon submitting new show listing form
-  # TODO: insert form data as a new Show record in the db, instead
   form = ShowForm(request.form)
   if form.validate():
     try:
@@ -55,8 +52,7 @@ def create_show_submission():
     flash('Errors ' + str(message))
     form = ShowForm()  
     return render_template('forms/new_show.html', form=form)
-  # on successful db insert, flash success
   return redirect(url_for('index'))
 
-# Export the artist_bp object
+# Export the show_bp blueprint object
 __all__ = ['show_bp']
